@@ -1,0 +1,1821 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>画幅裁切工具</title>
+<style>
+  :root{
+    --bg:#101214;
+    --panel:#181b1f;
+    --panel2:#20242a;
+    --panel3:#272d34;
+    --line:#333942;
+    --txt:#edf1f4;
+    --sub:#9ca7b3;
+    --accent:#3dd6a3;
+    --accent2:#f2b84b;
+    --danger:#ff6b7a;
+    --ok:#36c983;
+    --shadow:rgba(0,0,0,.48);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);
+    color:var(--txt);
+    overflow:hidden;
+  }
+  button,input,select{font:inherit}
+  button{color:inherit}
+  .app{display:flex;flex-direction:column;height:100vh;min-width:980px}
+  header{
+    height:58px;
+    padding:10px 18px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    gap:14px;
+    background:var(--panel);
+  }
+  header h1{font-size:17px;font-weight:700;white-space:nowrap}
+  header .tag{
+    font-size:12px;
+    color:var(--sub);
+    padding:4px 9px;
+    border:1px solid var(--line);
+    border-radius:999px;
+    white-space:nowrap;
+  }
+  .mode-tabs{
+    display:flex;
+    border:1px solid var(--line);
+    border-radius:8px;
+    overflow:hidden;
+    margin-left:8px;
+  }
+  .mode-tab{
+    min-width:76px;
+    padding:8px 14px;
+    border:0;
+    background:var(--panel2);
+    color:var(--sub);
+    cursor:pointer;
+  }
+  .mode-tab.active{background:var(--accent);color:#08110e;font-weight:700}
+  header .spacer{flex:1}
+  .infoline{font-size:12px;color:var(--sub);text-align:right;white-space:nowrap}
+  .main{flex:1;display:flex;min-height:0;overflow:hidden}
+
+  .sidebar{
+    width:230px;
+    border-right:1px solid var(--line);
+    background:var(--panel);
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+  }
+  .sidebar .head{
+    padding:11px 12px;
+    font-size:12px;
+    color:var(--sub);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    border-bottom:1px solid var(--line);
+  }
+  .clear-link{cursor:pointer;color:var(--sub);padding:3px 5px;border-radius:5px}
+  .clear-link:hover{color:var(--danger);background:rgba(255,107,122,.1)}
+  .addbar{padding:9px 10px;border-bottom:1px solid var(--line)}
+  .addbar button{
+    width:100%;
+    padding:9px 10px;
+    background:var(--panel2);
+    border:1px dashed var(--line);
+    color:var(--txt);
+    border-radius:8px;
+    cursor:pointer;
+    font-size:13px;
+  }
+  .addbar button:hover{border-color:var(--accent);color:var(--accent)}
+  .thumbs{flex:1;overflow-y:auto;padding:8px}
+  .thumb{
+    display:flex;
+    gap:9px;
+    align-items:center;
+    padding:7px;
+    border-radius:8px;
+    cursor:pointer;
+    margin-bottom:5px;
+    border:1px solid transparent;
+  }
+  .thumb:hover{background:var(--panel2)}
+  .thumb.active{background:var(--panel2);border-color:var(--accent)}
+  .thumb img,.thumb .fallback-thumb{
+    width:44px;
+    height:44px;
+    object-fit:cover;
+    border-radius:6px;
+    background:#050607;
+    flex-shrink:0;
+  }
+  .fallback-thumb{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--accent2);
+    font-size:11px;
+    border:1px solid var(--line);
+  }
+  .thumb .meta{font-size:11px;color:var(--sub);overflow:hidden;flex:1;line-height:1.45}
+  .thumb .meta .nm{color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:122px}
+  .thumb .meta .rt{color:var(--accent);font-size:10px}
+  .thumb .del{color:var(--sub);font-size:15px;padding:2px 6px;border-radius:4px}
+  .thumb .del:hover{color:var(--danger);background:rgba(255,107,122,.1)}
+
+  .stage{
+    flex:1;
+    min-width:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    background:
+      linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px) 50%/32px 32px,
+      linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px) 50%/32px 32px,
+      #111417;
+    overflow:hidden;
+    padding:18px;
+  }
+  .dropzone{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    color:var(--sub);
+    text-align:center;
+    padding:22px;
+  }
+  .dropzone.hide{display:none}
+  .dropzone .big{font-size:46px;opacity:.62;color:var(--accent)}
+  .dropzone .title{font-size:16px;color:var(--txt);font-weight:700}
+  .dropzone .desc{font-size:12px;line-height:1.7;max-width:420px}
+  .media-wrap{display:none;flex-direction:column;align-items:center;max-width:94%;max-height:94%;gap:12px}
+  .media-wrap.show{display:flex}
+  .media-box{position:relative;display:inline-block;line-height:0;max-width:100%;max-height:76vh}
+  #previewImage,#previewVideo{
+    max-width:100%;
+    max-height:76vh;
+    display:block;
+    border-radius:4px;
+    background:#050607;
+    user-select:none;
+    -webkit-user-drag:none;
+    box-shadow:0 18px 50px var(--shadow);
+  }
+  #previewVideo{min-width:260px}
+  .crop-overlay{position:absolute;inset:0;pointer-events:none}
+  .crop-box{
+    position:absolute;
+    border:2px solid var(--accent);
+    box-shadow:0 0 0 9999px rgba(0,0,0,.55);
+    cursor:move;
+    pointer-events:auto;
+  }
+  .crop-box .grid:before,.crop-box .grid:after{content:"";position:absolute}
+  .crop-box .grid:before{
+    left:33.333%;
+    right:33.333%;
+    top:0;
+    bottom:0;
+    border-left:1px solid rgba(255,255,255,.34);
+    border-right:1px solid rgba(255,255,255,.34);
+  }
+  .crop-box .grid:after{
+    top:33.333%;
+    bottom:33.333%;
+    left:0;
+    right:0;
+    border-top:1px solid rgba(255,255,255,.34);
+    border-bottom:1px solid rgba(255,255,255,.34);
+  }
+  .crop-box .handle{
+    position:absolute;
+    width:14px;
+    height:14px;
+    background:var(--accent);
+    border:2px solid #fff;
+    border-radius:50%;
+    pointer-events:auto;
+  }
+  .crop-box .h-nw{left:-8px;top:-8px;cursor:nwse-resize}
+  .crop-box .h-ne{right:-8px;top:-8px;cursor:nesw-resize}
+  .crop-box .h-sw{left:-8px;bottom:-8px;cursor:nesw-resize}
+  .crop-box .h-se{right:-8px;bottom:-8px;cursor:nwse-resize}
+  .video-controls{
+    display:none;
+    align-items:center;
+    gap:10px;
+    width:min(720px,100%);
+    background:rgba(24,27,31,.92);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:9px 10px;
+  }
+  .video-controls.show{display:flex}
+  .icon-btn{
+    width:34px;
+    height:34px;
+    border:1px solid var(--line);
+    border-radius:7px;
+    background:var(--panel2);
+    color:var(--txt);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .icon-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .video-controls input[type=range]{flex:1;accent-color:var(--accent)}
+  .time{font-size:12px;color:var(--sub);min-width:92px;text-align:right}
+
+  .panel{
+    width:320px;
+    border-left:1px solid var(--line);
+    background:var(--panel);
+    overflow-y:auto;
+    padding:16px;
+  }
+  .panel.disabled{opacity:.45;pointer-events:none}
+  .curname{
+    font-size:12px;
+    color:var(--accent);
+    margin-bottom:14px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .group{margin-bottom:22px}
+  .group h3{
+    font-size:12px;
+    color:var(--sub);
+    text-transform:uppercase;
+    letter-spacing:.5px;
+    margin-bottom:10px;
+  }
+  .ratios{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .ratio{
+    padding:9px 4px;
+    text-align:center;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:13px;
+    cursor:pointer;
+    background:var(--panel2);
+    transition:.15s;
+  }
+  .ratio:hover{border-color:var(--accent)}
+  .ratio.active{background:var(--accent);border-color:var(--accent);color:#08110e;font-weight:700}
+  .custom{display:flex;gap:6px;align-items:center;margin-top:10px}
+  .custom input{
+    width:62px;
+    background:var(--panel2);
+    border:1px solid var(--line);
+    color:var(--txt);
+    border-radius:6px;
+    padding:7px;
+    text-align:center;
+    font-size:13px;
+  }
+  .custom span{color:var(--sub)}
+  .custom button{
+    flex:1;
+    background:var(--panel2);
+    border:1px solid var(--line);
+    color:var(--txt);
+    border-radius:6px;
+    padding:7px;
+    cursor:pointer;
+    font-size:12px;
+  }
+  .custom button:hover{border-color:var(--accent)}
+  .anchors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:132px;margin:0 auto}
+  .anchors .a{
+    aspect-ratio:1;
+    border:1px solid var(--line);
+    border-radius:6px;
+    background:var(--panel2);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--sub);
+    font-size:12px;
+  }
+  .anchors .a.active{background:var(--accent);border-color:var(--accent);color:#08110e;font-weight:700}
+  .row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-size:13px;color:var(--sub);gap:10px}
+  .row input[type=range]{flex:1;accent-color:var(--accent)}
+  .row .val{color:var(--txt);min-width:42px;text-align:right}
+  select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:8px;font-size:13px}
+  .btn{
+    display:block;
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:8px;
+    font-size:14px;
+    font-weight:700;
+    cursor:pointer;
+    text-align:center;
+  }
+  .btn.primary{background:var(--accent);color:#08110e}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{background:var(--panel2);border:1px solid var(--line);color:var(--txt)}
+  .btn.ghost:hover{border-color:var(--accent)}
+  .btn.warn{background:var(--accent2);color:#171004}
+  .btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+  .footer-actions{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+  .hint{font-size:11px;color:var(--sub);line-height:1.6;margin-top:8px}
+  .status{
+    font-size:12px;
+    line-height:1.6;
+    color:var(--sub);
+    padding:10px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--panel2);
+  }
+  .status.ok{border-color:rgba(61,214,163,.5);color:#b8f6df}
+  .status.bad{border-color:rgba(255,107,122,.6);color:#ffc2c8}
+  .export-card{
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--panel2);
+    padding:10px;
+    margin-top:10px;
+  }
+  .export-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    font-size:12px;
+    color:var(--sub);
+    margin-bottom:8px;
+  }
+  .export-head strong{color:var(--txt);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .export-head span{color:var(--accent);font-weight:700}
+  .progress{
+    height:8px;
+    background:#0b0d0f;
+    border-radius:999px;
+    overflow:hidden;
+    border:1px solid var(--line);
+    margin-top:8px;
+  }
+  .progress span{display:block;height:100%;width:0%;background:var(--accent);transition:width .2s}
+  .metrics{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:8px;
+    margin-top:10px;
+  }
+  .metric{
+    border:1px solid rgba(255,255,255,.06);
+    background:#15181d;
+    border-radius:7px;
+    padding:7px;
+  }
+  .metric .k{font-size:10px;color:var(--sub);margin-bottom:3px}
+  .metric .v{font-size:12px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  details.log-details{
+    margin-top:10px;
+    font-size:12px;
+    color:var(--sub);
+  }
+  details.log-details summary{cursor:pointer;margin-bottom:8px}
+  .toast{
+    position:fixed;
+    bottom:24px;
+    left:50%;
+    transform:translateX(-50%);
+    background:var(--ok);
+    color:#06100b;
+    padding:10px 18px;
+    border-radius:8px;
+    font-size:13px;
+    opacity:0;
+    transition:.3s;
+    pointer-events:none;
+    z-index:99;
+    font-weight:700;
+  }
+  .toast.show{opacity:1}
+  input[type=file]{display:none}
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<div id="fileProtocolBlocker" style="display:none;position:fixed;inset:0;z-index:9999;background:#101214;color:#edf1f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;align-items:center;justify-content:center;padding:24px;text-align:center">
+  <div style="max-width:560px;border:1px solid #333942;background:#181b1f;border-radius:10px;padding:24px;box-shadow:0 18px 50px rgba(0,0,0,.48)">
+    <div style="font-size:20px;font-weight:700;margin-bottom:12px">视频导出不能直接双击 HTML 使用</div>
+    <div style="color:#9ca7b3;line-height:1.8;text-align:left">
+      图片裁切可以做成普通 HTML，但视频裁切需要 FFmpeg.wasm 多线程环境，浏览器必须从带响应头的本地服务或线上域名打开。
+      <br><br>
+      本地测试请在这个目录运行 <code style="color:#3dd6a3">npm run dev</code>，然后打开 <code style="color:#3dd6a3">http://localhost:4173</code>。
+      部署上线时使用项目里的 Netlify / Vercel 配置即可。
+    </div>
+  </div>
+</div>
+<script>
+  if (location.protocol === "file:") {
+    const blocker = document.getElementById("fileProtocolBlocker");
+    blocker.style.display = "flex";
+  }
+</script>
+<div class="app">
+  <header>
+    <h1>画幅裁切工具</h1>
+    <span class="tag">纯前端本地处理 · 不上传素材</span>
+    <div class="mode-tabs" role="tablist" aria-label="素材类型">
+      <button class="mode-tab active" data-mode="image">图片</button>
+      <button class="mode-tab" data-mode="video">视频</button>
+    </div>
+    <div class="spacer"></div>
+    <span class="infoline" id="globalInfo"></span>
+  </header>
+
+  <div class="main">
+    <aside class="sidebar">
+      <div class="head">
+        <span id="listCount">图片 0</span>
+        <span class="clear-link" id="clearAll" title="清空">清空</span>
+      </div>
+      <div class="addbar"><button id="addBtn">添加图片</button></div>
+      <div class="thumbs" id="thumbs"></div>
+    </aside>
+
+    <main class="stage" id="stage">
+      <div class="dropzone" id="dropzone">
+        <div class="big" id="dropIcon">+</div>
+        <div class="title" id="dropTitle">把图片拖进来</div>
+        <button class="btn primary" id="pickBtn" style="width:auto;padding:10px 22px">选择图片</button>
+        <div class="desc" id="dropDesc">支持 JPG / PNG / WEBP / BMP / TIFF，可多选、可批量、可随时追加。</div>
+      </div>
+
+      <div class="media-wrap" id="mediaWrap">
+        <div class="media-box" id="mediaBox">
+          <img id="previewImage" alt="图片预览">
+          <video id="previewVideo" playsinline muted preload="metadata"></video>
+          <div class="crop-overlay">
+            <div class="crop-box" id="cropBox">
+              <div class="grid"></div>
+              <div class="handle h-nw" data-h="nw"></div>
+              <div class="handle h-ne" data-h="ne"></div>
+              <div class="handle h-sw" data-h="sw"></div>
+              <div class="handle h-se" data-h="se"></div>
+            </div>
+          </div>
+        </div>
+        <div class="video-controls" id="videoControls">
+          <button class="icon-btn" id="playPause" title="播放 / 暂停">▶</button>
+          <input type="range" id="seek" min="0" max="1000" value="0">
+          <span class="time" id="timeLabel">00:00 / 00:00</span>
+        </div>
+      </div>
+    </main>
+
+    <aside class="panel disabled" id="panel">
+      <div class="curname" id="curName">未选择素材</div>
+
+      <div class="group">
+        <h3>目标画幅</h3>
+        <div class="ratios" id="ratios">
+          <div class="ratio" data-r="21:9">21:9</div>
+          <div class="ratio" data-r="16:9">16:9</div>
+          <div class="ratio" data-r="4:3">4:3</div>
+          <div class="ratio" data-r="1:1">1:1</div>
+          <div class="ratio" data-r="3:4">3:4</div>
+          <div class="ratio" data-r="9:16">9:16</div>
+          <div class="ratio" data-r="free">自由</div>
+        </div>
+        <div class="custom">
+          <input type="number" id="cw" placeholder="宽" min="1">
+          <span>:</span>
+          <input type="number" id="ch" placeholder="高" min="1">
+          <button id="applyCustom">应用自定义</button>
+        </div>
+      </div>
+
+      <div class="group" id="sizeGroup">
+        <h3>裁切框大小</h3>
+        <div class="row">
+          <span>缩放</span>
+          <input type="range" id="cropScale" min="10" max="100" value="100">
+          <span class="val" id="cropScaleVal">100%</span>
+        </div>
+        <div class="hint">可以直接拖动预览里的裁切框，或拖四角缩放。</div>
+      </div>
+
+      <div class="group" id="anchorGroup">
+        <h3>对齐位置</h3>
+        <div class="anchors" id="anchors">
+          <div class="a" data-a="lt">↖</div><div class="a" data-a="top">↑</div><div class="a" data-a="rt">↗</div>
+          <div class="a" data-a="left">←</div><div class="a active" data-a="center">●</div><div class="a" data-a="right">→</div>
+          <div class="a" data-a="lb">↙</div><div class="a" data-a="bottom">↓</div><div class="a" data-a="rb">↘</div>
+        </div>
+      </div>
+
+      <div class="group" id="imageExportGroup">
+        <h3>图片导出</h3>
+        <div class="row">
+          <span>格式</span>
+          <select id="fmt" style="width:auto">
+            <option value="image/jpeg">JPG</option>
+            <option value="image/png">PNG</option>
+            <option value="image/webp">WEBP</option>
+          </select>
+        </div>
+        <div class="row" id="qualityRow">
+          <span>质量</span>
+          <input type="range" id="quality" min="1" max="100" value="92">
+          <span class="val" id="qualityVal">92</span>
+        </div>
+      </div>
+
+      <div class="group hide" id="videoExportGroup">
+        <h3>视频导出</h3>
+        <div class="status" id="isolationStatus">正在检查浏览器处理环境...</div>
+        <div class="export-card">
+          <div class="export-head">
+            <strong id="progressTitle">等待导出</strong>
+            <span id="progressPercent">0%</span>
+          </div>
+          <div class="progress"><span id="progressBar"></span></div>
+          <div class="metrics">
+            <div class="metric"><div class="k">当前阶段</div><div class="v" id="ffmpegStatus">FFmpeg 引擎尚未加载</div></div>
+            <div class="metric"><div class="k">处理速度</div><div class="v" id="progressSpeed">--</div></div>
+            <div class="metric"><div class="k">已用时间</div><div class="v" id="progressElapsed">00:00</div></div>
+            <div class="metric"><div class="k">预计剩余</div><div class="v" id="progressEta">--</div></div>
+            <div class="metric"><div class="k">当前引擎</div><div class="v" id="engineStatus">--</div></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn ghost" id="cancelExport" style="padding:9px;font-size:12px" disabled>停止导出</button>
+            <button class="btn ghost" id="exportCompat" style="padding:9px;font-size:12px">兼容模式导出</button>
+          </div>
+          <details class="log-details" id="logDetails">
+            <summary>技术日志</summary>
+            <textarea id="ffmpegLog" readonly spellcheck="false" style="width:100%;height:132px;background:#0b0d0f;border:1px solid var(--line);border-radius:8px;color:#cbd5de;padding:9px;font-size:11px;line-height:1.45;resize:vertical"></textarea>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button class="btn ghost" id="copyLog" style="padding:9px;font-size:12px">复制日志</button>
+              <button class="btn ghost" id="downloadLog" style="padding:9px;font-size:12px">下载日志</button>
+            </div>
+          </details>
+        </div>
+        <div class="hint">当前输出: MP4 / H.264 / CRF 20 / veryfast / 音频原样复制。默认使用多线程引擎，若长时间卡住会自动切换兼容模式重试。</div>
+      </div>
+
+      <div class="footer-actions">
+        <button class="btn ghost hide" id="applyVideoToAll">应用当前视频设置到全部视频</button>
+        <button class="btn primary" id="downloadOne">下载当前图片</button>
+        <button class="btn ghost" id="downloadAll">批量导出全部图片</button>
+        <div class="hint" id="footerHint">每张图片按它自己的画幅 / 对齐 / 裁切框导出。全程本地处理，图片不上传。</div>
+      </div>
+    </aside>
+  </div>
+</div>
+<input type="file" id="fileInput" accept="image/*" multiple>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { FFmpeg } from "./vendor/ffmpeg/ffmpeg/dist/esm/index.js";
+import { fetchFile, toBlobURL } from "./vendor/ffmpeg/util/dist/esm/index.js";
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+const state = {
+  mode: "image",
+  images: [],
+  videos: [],
+  current: { image: -1, video: -1 },
+  busy: false,
+  cancelRequested: false,
+  ffmpeg: null,
+  ffmpegLoaded: false,
+  ffmpegEngine: "",
+  lastLog: "",
+  logLines: [],
+  exportProgress: {
+    active: false,
+    item: null,
+    index: 0,
+    total: 0,
+    startedAt: 0,
+    itemStartedAt: 0,
+    duration: 0,
+    percent: 0,
+    lastFrame: 0,
+    speed: "--",
+    timer: null,
+    lastActivityAt: 0
+  }
+};
+
+const els = {
+  fileInput: $("#fileInput"),
+  pickBtn: $("#pickBtn"),
+  addBtn: $("#addBtn"),
+  stage: $("#stage"),
+  dropzone: $("#dropzone"),
+  mediaWrap: $("#mediaWrap"),
+  previewImage: $("#previewImage"),
+  previewVideo: $("#previewVideo"),
+  mediaBox: $("#mediaBox"),
+  cropBox: $("#cropBox"),
+  panel: $("#panel"),
+  thumbs: $("#thumbs"),
+  listCount: $("#listCount"),
+  curName: $("#curName"),
+  globalInfo: $("#globalInfo"),
+  videoControls: $("#videoControls"),
+  playPause: $("#playPause"),
+  seek: $("#seek"),
+  timeLabel: $("#timeLabel"),
+  progressTitle: $("#progressTitle"),
+  progressPercent: $("#progressPercent"),
+  progressBar: $("#progressBar"),
+  ffmpegStatus: $("#ffmpegStatus"),
+  progressSpeed: $("#progressSpeed"),
+  progressElapsed: $("#progressElapsed"),
+  progressEta: $("#progressEta"),
+  engineStatus: $("#engineStatus"),
+  cancelExport: $("#cancelExport"),
+  exportCompat: $("#exportCompat"),
+  ffmpegLog: $("#ffmpegLog"),
+  copyLog: $("#copyLog"),
+  downloadLog: $("#downloadLog"),
+  isolationStatus: $("#isolationStatus"),
+  downloadOne: $("#downloadOne"),
+  downloadAll: $("#downloadAll"),
+  applyVideoToAll: $("#applyVideoToAll"),
+  footerHint: $("#footerHint")
+};
+
+function defaultSettings(){
+  return { ratio:"9:16", anchor:"center", scale:1, rect:null };
+}
+
+function listFor(mode = state.mode){
+  return mode === "image" ? state.images : state.videos;
+}
+
+function cur(mode = state.mode){
+  const list = listFor(mode);
+  return list[state.current[mode]] || null;
+}
+
+function curS(){
+  const item = cur();
+  return item ? item.settings : null;
+}
+
+function mediaLabel(){
+  return state.mode === "image" ? "图片" : "视频";
+}
+
+function isMp4(file){
+  return file.type === "video/mp4" || /\.mp4$/i.test(file.name);
+}
+
+function safeName(name){
+  return name.replace(/\.[^.]+$/,"").replace(/[\\/:*?"<>|]+/g,"_").slice(0,80) || "output";
+}
+
+function ratioTag(s){
+  return s.ratio === "free" ? "free" : s.ratio.replace(":","x");
+}
+
+function showDropzone(show){
+  els.dropzone.classList.toggle("hide", !show);
+  els.mediaWrap.classList.toggle("show", !show);
+}
+
+function setMode(mode){
+  if(state.busy) return;
+  state.mode = mode;
+  $$(".mode-tab").forEach(tab => tab.classList.toggle("active", tab.dataset.mode === mode));
+  els.fileInput.accept = mode === "image" ? "image/*" : "video/mp4,.mp4";
+  els.addBtn.textContent = mode === "image" ? "添加图片" : "添加 MP4 视频";
+  $("#dropIcon").textContent = mode === "image" ? "+" : "MP4";
+  $("#dropTitle").textContent = mode === "image" ? "把图片拖进来" : "把 MP4 视频拖进来";
+  $("#dropDesc").textContent = mode === "image"
+    ? "支持 JPG / PNG / WEBP / BMP / TIFF，可多选、可批量、可随时追加。"
+    : "V1 仅支持 MP4。可多选，批量导出会逐个处理。";
+  els.pickBtn.textContent = mode === "image" ? "选择图片" : "选择 MP4 视频";
+  $("#imageExportGroup").classList.toggle("hide", mode !== "image");
+  $("#videoExportGroup").classList.toggle("hide", mode !== "video");
+  els.applyVideoToAll.classList.toggle("hide", mode !== "video");
+  els.downloadOne.textContent = mode === "image" ? "下载当前图片" : "导出当前视频";
+  els.downloadAll.textContent = mode === "image" ? "批量导出全部图片" : "批量导出全部视频";
+  els.footerHint.textContent = mode === "image"
+    ? "每张图片按它自己的画幅 / 对齐 / 裁切框导出。全程本地处理，图片不上传。"
+    : "每个视频按它自己的画幅 / 对齐 / 裁切框导出。视频不上传，处理速度取决于本机性能。";
+  updateIsolationStatus();
+  renderThumbs();
+  const index = state.current[mode];
+  if(index >= 0) selectItem(index);
+  else {
+    showDropzone(true);
+    hideInactiveMedia();
+    els.panel.classList.add("disabled");
+    els.curName.textContent = `未选择${mediaLabel()}`;
+    els.globalInfo.textContent = "";
+  }
+}
+
+$$(".mode-tab").forEach(tab => tab.addEventListener("click", () => setMode(tab.dataset.mode)));
+els.pickBtn.addEventListener("click", () => els.fileInput.click());
+els.addBtn.addEventListener("click", () => els.fileInput.click());
+els.fileInput.addEventListener("change", e => {
+  handleFiles(e.target.files);
+  els.fileInput.value = "";
+});
+
+["dragenter","dragover"].forEach(ev => els.stage.addEventListener(ev, e => {
+  e.preventDefault();
+  els.stage.style.outline = "2px dashed var(--accent)";
+}));
+["dragleave","drop"].forEach(ev => els.stage.addEventListener(ev, e => {
+  e.preventDefault();
+  els.stage.style.outline = "none";
+}));
+els.stage.addEventListener("drop", e => {
+  e.preventDefault();
+  const items = e.dataTransfer.items;
+  if(items && items.length && items[0].webkitGetAsEntry){
+    const files = [];
+    let pending = 0;
+    let done = false;
+    const finish = () => { if(done && pending === 0) handleFiles(files); };
+    for(const it of items){
+      const entry = it.webkitGetAsEntry();
+      if(entry) traverse(entry);
+    }
+    function traverse(entry){
+      if(entry.isFile){
+        pending++;
+        entry.file(f => { files.push(f); pending--; finish(); });
+      }else if(entry.isDirectory){
+        pending++;
+        entry.createReader().readEntries(ents => {
+          pending--;
+          ents.forEach(traverse);
+          finish();
+        });
+      }
+    }
+    done = true;
+    finish();
+  }else{
+    handleFiles(e.dataTransfer.files);
+  }
+});
+
+async function handleFiles(fileList){
+  const files = Array.from(fileList);
+  if(state.mode === "image"){
+    const arr = files.filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|bmp|tiff?)$/i.test(f.name));
+    if(!arr.length){ toast("未发现图片文件"); return; }
+    const wasEmpty = state.images.length === 0;
+    let loaded = 0;
+    arr.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          state.images.push({
+            type:"image",
+            name:file.name,
+            dataURL:ev.target.result,
+            imgEl:img,
+            w:img.naturalWidth,
+            h:img.naturalHeight,
+            settings:defaultSettings()
+          });
+          loaded++;
+          renderThumbs();
+          if(state.current.image === -1) selectItem(0);
+          if(loaded === arr.length) toast((wasEmpty ? "已导入 " : "已追加 ") + arr.length + " 张图片");
+        };
+        img.onerror = () => toast("有图片读取失败");
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }else{
+    const arr = files.filter(isMp4);
+    const rejected = files.length - arr.length;
+    if(!arr.length){ toast("当前版本仅支持 MP4 视频"); return; }
+    const wasEmpty = state.videos.length === 0;
+    for(const file of arr){
+      try{
+        const video = await loadVideoFile(file);
+        state.videos.push(video);
+        renderThumbs();
+        if(state.current.video === -1) selectItem(0);
+      }catch(err){
+        console.error(err);
+        toast("有视频读取失败");
+      }
+    }
+    toast((wasEmpty ? "已导入 " : "已追加 ") + arr.length + " 个视频" + (rejected ? `，已忽略 ${rejected} 个非 MP4` : ""));
+  }
+}
+
+function loadVideoFile(file){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+    let settled = false;
+    const cleanup = () => {
+      video.onloadedmetadata = null;
+      video.onloadeddata = null;
+      video.onseeked = null;
+      video.onerror = null;
+    };
+    const done = thumb => {
+      if(settled) return;
+      settled = true;
+      cleanup();
+      resolve({
+        type:"video",
+        name:file.name,
+        file,
+        url,
+        thumb,
+        w:video.videoWidth,
+        h:video.videoHeight,
+        duration:Number.isFinite(video.duration) ? video.duration : 0,
+        settings:defaultSettings()
+      });
+    };
+    const makeThumb = () => {
+      try{
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(2, Math.min(320, video.videoWidth || 320));
+        canvas.height = Math.max(2, Math.round(canvas.width * (video.videoHeight || 180) / (video.videoWidth || 320)));
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        done(canvas.toDataURL("image/jpeg", .76));
+      }catch{
+        done("");
+      }
+    };
+    video.onloadedmetadata = () => {
+      if(!video.videoWidth || !video.videoHeight){
+        reject(new Error("无法读取视频尺寸"));
+        return;
+      }
+      const targetTime = Math.min(.1, Math.max(0, (video.duration || 0) / 10));
+      if(targetTime > 0){
+        video.currentTime = targetTime;
+      }else{
+        makeThumb();
+      }
+    };
+    video.onloadeddata = () => {
+      if(video.currentTime === 0) makeThumb();
+    };
+    video.onseeked = makeThumb;
+    video.onerror = () => {
+      cleanup();
+      URL.revokeObjectURL(url);
+      reject(new Error("视频加载失败"));
+    };
+    video.src = url;
+  });
+}
+
+function renderThumbs(){
+  const list = listFor();
+  els.thumbs.innerHTML = "";
+  list.forEach((item, i) => {
+    const d = document.createElement("div");
+    d.className = "thumb" + (i === state.current[state.mode] ? " active" : "");
+    const rt = item.settings.ratio === "free" ? "自由" : item.settings.ratio;
+    const media = item.type === "image" || item.thumb
+      ? `<img src="${item.type === "image" ? item.dataURL : item.thumb}" alt="">`
+      : `<div class="fallback-thumb">MP4</div>`;
+    const detail = item.type === "video" ? `${formatTime(item.duration)} · ${item.w}×${item.h}` : `${item.w}×${item.h}`;
+    d.innerHTML = `${media}<div class="meta"><div class="nm">${escapeHTML(item.name)}</div><div>${detail}</div><div class="rt">${rt}</div></div><span class="del" title="删除">×</span>`;
+    d.addEventListener("click", e => {
+      if(e.target.classList.contains("del")){
+        removeItem(i);
+        e.stopPropagation();
+      }else{
+        selectItem(i);
+      }
+    });
+    els.thumbs.appendChild(d);
+  });
+  els.listCount.textContent = `${mediaLabel()} ${list.length}`;
+  const has = list.length > 0;
+  els.downloadOne.disabled = !has || state.busy || (state.mode === "video" && !window.crossOriginIsolated);
+  els.downloadAll.disabled = !has || state.busy || (state.mode === "video" && !window.crossOriginIsolated);
+  els.applyVideoToAll.disabled = !has || state.busy;
+  els.cancelExport.disabled = !state.busy;
+  els.exportCompat.disabled = !has || state.busy || state.mode !== "video" || !window.crossOriginIsolated;
+  els.panel.classList.toggle("disabled", !has);
+}
+
+function removeItem(i){
+  const list = listFor();
+  const [removed] = list.splice(i,1);
+  if(removed?.type === "video") URL.revokeObjectURL(removed.url);
+  if(state.current[state.mode] >= list.length) state.current[state.mode] = list.length - 1;
+  renderThumbs();
+  if(list.length === 0){
+    state.current[state.mode] = -1;
+    showDropzone(true);
+    hideInactiveMedia();
+    els.globalInfo.textContent = "";
+    els.curName.textContent = `未选择${mediaLabel()}`;
+  }else{
+    selectItem(state.current[state.mode]);
+  }
+}
+
+$("#clearAll").addEventListener("click", () => {
+  if(state.busy) return;
+  const list = listFor();
+  if(state.mode === "video") list.forEach(v => URL.revokeObjectURL(v.url));
+  list.length = 0;
+  state.current[state.mode] = -1;
+  renderThumbs();
+  showDropzone(true);
+  hideInactiveMedia();
+  els.globalInfo.textContent = "";
+  els.curName.textContent = `未选择${mediaLabel()}`;
+});
+
+function selectItem(i){
+  const item = listFor()[i];
+  if(!item) return;
+  state.current[state.mode] = i;
+  showDropzone(false);
+  renderThumbs();
+  els.curName.textContent = `当前${mediaLabel()}: ${item.name}`;
+  ensureRect(item);
+  syncPanelFromSettings();
+  if(item.type === "image"){
+    els.previewVideo.pause();
+    els.previewVideo.removeAttribute("src");
+    els.previewVideo.load();
+    els.previewVideo.classList.add("hide");
+    els.previewImage.classList.remove("hide");
+    els.videoControls.classList.remove("show");
+    els.previewImage.onload = () => {
+      drawCropBox();
+      updateInfo();
+    };
+    els.previewImage.src = item.dataURL;
+    if(els.previewImage.complete){
+      drawCropBox();
+      updateInfo();
+    }
+  }else{
+    els.previewImage.classList.add("hide");
+    els.previewVideo.classList.remove("hide");
+    els.videoControls.classList.add("show");
+    if(els.previewVideo.src !== item.url){
+      els.previewVideo.src = item.url;
+      els.previewVideo.load();
+    }
+    els.previewVideo.currentTime = Math.min(els.previewVideo.currentTime || 0, item.duration || 0);
+    drawCropBox();
+    updateInfo();
+    updateVideoControls();
+  }
+}
+
+function hideInactiveMedia(){
+  els.previewImage.classList.add("hide");
+  els.previewVideo.classList.add("hide");
+  els.videoControls.classList.remove("show");
+}
+
+function syncPanelFromSettings(){
+  const s = curS();
+  if(!s) return;
+  $$(".ratio").forEach(r => r.classList.toggle("active", r.dataset.r === s.ratio));
+  $$(".anchors .a").forEach(a => a.classList.toggle("active", a.dataset.a === s.anchor));
+  $("#cropScale").value = Math.round(s.scale * 100);
+  $("#cropScaleVal").textContent = Math.round(s.scale * 100) + "%";
+  const isFree = s.ratio === "free";
+  $("#sizeGroup").style.display = isFree ? "none" : "block";
+  $("#anchorGroup").style.display = isFree ? "none" : "block";
+}
+
+function updateInfo(){
+  const item = cur();
+  if(!item){
+    els.globalInfo.textContent = "";
+    return;
+  }
+  const o = outputSize(item);
+  if(item.type === "video"){
+    const n = normalizeCrop(item);
+    els.globalInfo.textContent = `原视频 ${item.w}×${item.h} → 输出 ${n.w}×${n.h} · ${formatTime(item.duration)}`;
+  }else{
+    els.globalInfo.textContent = `原图 ${item.w}×${item.h} → 输出 ${o.w}×${o.h}`;
+  }
+}
+
+$("#ratios").addEventListener("click", e => {
+  const el = e.target.closest(".ratio");
+  const item = cur();
+  if(!el || !item || state.busy) return;
+  item.settings.ratio = el.dataset.r;
+  item.settings.scale = 1;
+  item.settings.rect = null;
+  ensureRect(item);
+  syncPanelFromSettings();
+  drawCropBox();
+  updateInfo();
+  renderThumbs();
+});
+
+$("#applyCustom").addEventListener("click", () => {
+  const item = cur();
+  if(!item || state.busy) return;
+  const w = parseFloat($("#cw").value);
+  const h = parseFloat($("#ch").value);
+  if(!(w > 0 && h > 0)){
+    toast("请输入有效的宽高比");
+    return;
+  }
+  item.settings.ratio = w + ":" + h;
+  item.settings.scale = 1;
+  item.settings.rect = null;
+  ensureRect(item);
+  syncPanelFromSettings();
+  drawCropBox();
+  updateInfo();
+  renderThumbs();
+  toast(`当前${mediaLabel()}已设为 ${item.settings.ratio}`);
+});
+
+$("#anchors").addEventListener("click", e => {
+  const a = e.target.closest(".a");
+  const item = cur();
+  if(!a || !a.dataset.a || !item || state.busy) return;
+  item.settings.anchor = a.dataset.a;
+  positionRectByAnchor(item);
+  syncPanelFromSettings();
+  drawCropBox();
+});
+
+$("#cropScale").addEventListener("input", e => {
+  const item = cur();
+  if(!item || state.busy) return;
+  const v = parseInt(e.target.value, 10);
+  item.settings.scale = v / 100;
+  $("#cropScaleVal").textContent = v + "%";
+  resizeRectByScale(item);
+  drawCropBox();
+  updateInfo();
+});
+
+$("#quality").addEventListener("input", e => $("#qualityVal").textContent = e.target.value);
+$("#fmt").addEventListener("change", e => {
+  $("#qualityRow").style.display = e.target.value === "image/png" ? "none" : "flex";
+});
+
+function ratioVal(s){
+  if(s.ratio === "free") return null;
+  const [a,b] = s.ratio.split(":").map(Number);
+  return a / b;
+}
+
+function maxFit(w,h,r){
+  const curRatio = w / h;
+  if(curRatio > r) return { w:h * r, h };
+  return { w, h:w / r };
+}
+
+function ensureRect(item){
+  const s = item.settings;
+  const r = ratioVal(s);
+  if(!s.rect){
+    if(r === null){
+      s.rect = { x:0, y:0, w:item.w, h:item.h };
+    }else{
+      const m = maxFit(item.w, item.h, r);
+      s.rect = { w:m.w * s.scale, h:m.h * s.scale, x:0, y:0 };
+      positionRectByAnchor(item);
+    }
+  }
+  clampRect(item);
+}
+
+function resizeRectByScale(item){
+  const s = item.settings;
+  const r = ratioVal(s);
+  if(r === null) return;
+  const m = maxFit(item.w, item.h, r);
+  const cx = s.rect.x + s.rect.w / 2;
+  const cy = s.rect.y + s.rect.h / 2;
+  s.rect.w = m.w * s.scale;
+  s.rect.h = m.h * s.scale;
+  s.rect.x = cx - s.rect.w / 2;
+  s.rect.y = cy - s.rect.h / 2;
+  clampRect(item);
+}
+
+function positionRectByAnchor(item){
+  const s = item.settings;
+  if(!s.rect) return;
+  const a = s.anchor;
+  if(["lt","left","lb"].includes(a)) s.rect.x = 0;
+  else if(["rt","right","rb"].includes(a)) s.rect.x = item.w - s.rect.w;
+  else s.rect.x = (item.w - s.rect.w) / 2;
+  if(["lt","top","rt"].includes(a)) s.rect.y = 0;
+  else if(["lb","bottom","rb"].includes(a)) s.rect.y = item.h - s.rect.h;
+  else s.rect.y = (item.h - s.rect.h) / 2;
+  clampRect(item);
+}
+
+function clampRect(item){
+  const s = item.settings;
+  if(!s.rect) return;
+  s.rect.w = Math.max(2, Math.min(s.rect.w, item.w));
+  s.rect.h = Math.max(2, Math.min(s.rect.h, item.h));
+  s.rect.x = Math.max(0, Math.min(item.w - s.rect.w, s.rect.x));
+  s.rect.y = Math.max(0, Math.min(item.h - s.rect.h, s.rect.y));
+}
+
+function outputSize(item){
+  const rect = item.settings.rect || { x:0, y:0, w:item.w, h:item.h };
+  return { w:Math.round(rect.w), h:Math.round(rect.h) };
+}
+
+function drawCropBox(){
+  const item = cur();
+  if(!item || !item.settings.rect){
+    els.cropBox.style.display = "none";
+    return;
+  }
+  const media = item.type === "image" ? els.previewImage : els.previewVideo;
+  if(!media.clientWidth || !media.clientHeight) return;
+  const sx = media.clientWidth / item.w;
+  const sy = media.clientHeight / item.h;
+  const r = item.settings.rect;
+  els.cropBox.style.display = "block";
+  els.cropBox.style.left = (r.x * sx) + "px";
+  els.cropBox.style.top = (r.y * sy) + "px";
+  els.cropBox.style.width = (r.w * sx) + "px";
+  els.cropBox.style.height = (r.h * sy) + "px";
+}
+window.addEventListener("resize", drawCropBox);
+els.previewVideo.addEventListener("loadedmetadata", () => {
+  drawCropBox();
+  updateVideoControls();
+});
+els.previewVideo.addEventListener("timeupdate", updateVideoControls);
+els.previewVideo.addEventListener("pause", updateVideoControls);
+els.previewVideo.addEventListener("play", updateVideoControls);
+
+(function setupDragging(){
+  let mode = null;
+  let sx = 0;
+  let sy = 0;
+  let start = null;
+  function imgScale(){
+    const item = cur();
+    const media = item.type === "image" ? els.previewImage : els.previewVideo;
+    return media.clientWidth / item.w;
+  }
+  els.cropBox.addEventListener("mousedown", e => {
+    const item = cur();
+    if(!item || state.busy) return;
+    mode = e.target.dataset.h || "move";
+    sx = e.clientX;
+    sy = e.clientY;
+    start = { ...item.settings.rect };
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  window.addEventListener("mousemove", e => {
+    const item = cur();
+    if(!mode || !item) return;
+    const s = item.settings;
+    const sc = imgScale();
+    const r = ratioVal(s);
+    const dx = (e.clientX - sx) / sc;
+    const dy = (e.clientY - sy) / sc;
+    if(mode === "move"){
+      s.rect.x = Math.max(0, Math.min(item.w - s.rect.w, start.x + dx));
+      s.rect.y = Math.max(0, Math.min(item.h - s.rect.h, start.y + dy));
+    }else if(r === null){
+      let x1 = start.x;
+      let y1 = start.y;
+      let x2 = start.x + start.w;
+      let y2 = start.y + start.h;
+      if(mode === "nw"){ x1 = start.x + dx; y1 = start.y + dy; }
+      else if(mode === "ne"){ x2 = start.x + start.w + dx; y1 = start.y + dy; }
+      else if(mode === "sw"){ x1 = start.x + dx; y2 = start.y + start.h + dy; }
+      else if(mode === "se"){ x2 = start.x + start.w + dx; y2 = start.y + start.h + dy; }
+      x1 = Math.max(0, Math.min(x1, x2 - 20));
+      y1 = Math.max(0, Math.min(y1, y2 - 20));
+      x2 = Math.min(item.w, Math.max(x2, x1 + 20));
+      y2 = Math.min(item.h, Math.max(y2, y1 + 20));
+      s.rect = { x:x1, y:y1, w:x2 - x1, h:y2 - y1 };
+    }else{
+      let nw = start.w;
+      let nx = start.x;
+      let ny = start.y;
+      if(mode === "se" || mode === "ne") nw = start.w + dx;
+      else if(mode === "sw" || mode === "nw") nw = start.w - dx;
+      nw = Math.max(20, nw);
+      let nh = nw / r;
+      if(mode === "se"){ nx = start.x; ny = start.y; }
+      else if(mode === "ne"){ nx = start.x; ny = start.y + start.h - nh; }
+      else if(mode === "sw"){ nx = start.x + start.w - nw; ny = start.y; }
+      else if(mode === "nw"){ nx = start.x + start.w - nw; ny = start.y + start.h - nh; }
+      if(nx < 0){ const over = -nx; nw -= over; nh = nw / r; nx = 0; }
+      if(ny < 0) ny = 0;
+      if(nx + nw > item.w) nw = item.w - nx;
+      if(ny + nh > item.h){ nh = item.h - ny; nw = nh * r; }
+      nh = nw / r;
+      s.rect = { x:nx, y:ny, w:nw, h:nh };
+      clampRect(item);
+      const m = maxFit(item.w, item.h, r);
+      s.scale = Math.min(1, s.rect.w / m.w);
+      $("#cropScale").value = Math.round(s.scale * 100);
+      $("#cropScaleVal").textContent = Math.round(s.scale * 100) + "%";
+    }
+    drawCropBox();
+    updateInfo();
+  });
+  window.addEventListener("mouseup", () => { mode = null; });
+})();
+
+function renderImage(item){
+  const rect = item.settings.rect || { x:0, y:0, w:item.w, h:item.h };
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  canvas.width = Math.round(rect.w);
+  canvas.height = Math.round(rect.h);
+  ctx.drawImage(item.imgEl, rect.x, rect.y, rect.w, rect.h, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+function ext(){
+  const f = $("#fmt").value;
+  return f === "image/png" ? "png" : f === "image/webp" ? "webp" : "jpg";
+}
+
+function downloadCanvas(canvas, name){
+  const fmt = $("#fmt").value;
+  const q = parseInt($("#quality").value, 10) / 100;
+  const url = canvas.toDataURL(fmt, fmt === "image/png" ? undefined : q);
+  downloadURL(url, name);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadURL(url, name){
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+els.downloadOne.addEventListener("click", async () => {
+  const item = cur();
+  if(!item || state.busy) return;
+  if(state.mode === "image"){
+    const canvas = renderImage(item);
+    downloadCanvas(canvas, `${safeName(item.name)}_${ratioTag(item.settings)}.${ext()}`);
+    toast("已下载当前图片");
+  }else{
+    await exportVideos([item]);
+  }
+});
+
+els.downloadAll.addEventListener("click", async () => {
+  if(state.busy) return;
+  if(state.mode === "image"){
+    if(!state.images.length) return;
+    toast(`开始批量导出 ${state.images.length} 张图片`);
+    for(const item of state.images){
+      const canvas = renderImage(item);
+      downloadCanvas(canvas, `${safeName(item.name)}_${ratioTag(item.settings)}.${ext()}`);
+      await delay(250);
+    }
+    toast("批量导出完成");
+  }else{
+    await exportVideos([...state.videos]);
+  }
+});
+
+els.cancelExport.addEventListener("click", () => {
+  if(!state.busy) return;
+  state.cancelRequested = true;
+  appendLog("用户请求停止导出。");
+  setProgress(0, "正在停止导出");
+  if(state.ffmpeg){
+    state.ffmpeg.terminate();
+    state.ffmpeg = null;
+    state.ffmpegLoaded = false;
+    state.ffmpegEngine = "";
+    els.engineStatus.textContent = "--";
+  }
+});
+
+els.exportCompat.addEventListener("click", async () => {
+  const item = cur("video");
+  if(!item || state.busy) return;
+  await exportVideos([item], "single");
+});
+
+els.applyVideoToAll.addEventListener("click", () => {
+  if(state.mode !== "video" || state.busy) return;
+  const current = cur("video");
+  if(!current) return;
+  const source = current.settings;
+  state.videos.forEach(item => {
+    item.settings.ratio = source.ratio;
+    item.settings.anchor = source.anchor;
+    item.settings.scale = source.scale;
+    item.settings.rect = null;
+    ensureRect(item);
+  });
+  syncPanelFromSettings();
+  drawCropBox();
+  updateInfo();
+  renderThumbs();
+  toast("已应用到全部视频");
+});
+
+function normalizeCrop(item){
+  ensureRect(item);
+  const rect = item.settings.rect;
+  let x = Math.round(rect.x);
+  let y = Math.round(rect.y);
+  let w = Math.round(rect.w);
+  let h = Math.round(rect.h);
+  x = Math.max(0, Math.min(item.w - 2, x));
+  y = Math.max(0, Math.min(item.h - 2, y));
+  if(x % 2) x -= 1;
+  if(y % 2) y -= 1;
+  w = Math.max(2, Math.min(w, item.w - x));
+  h = Math.max(2, Math.min(h, item.h - y));
+  if(w % 2) w -= 1;
+  if(h % 2) h -= 1;
+  if(x + w > item.w) w = item.w - x;
+  if(y + h > item.h) h = item.h - y;
+  if(w % 2) w -= 1;
+  if(h % 2) h -= 1;
+  if(w < 2 || h < 2) throw new Error("裁切区域过小");
+  return { x, y, w, h };
+}
+
+async function ensureFfmpegLoaded(engine = "mt"){
+  if(!window.crossOriginIsolated){
+    appendLog("错误：当前页面没有启用跨域隔离，无法启动多线程 FFmpeg。");
+    throw new Error("当前页面没有启用跨域隔离，无法启动多线程 FFmpeg。请用项目里的本地服务器或配置好部署响应头。");
+  }
+  if(state.ffmpegLoaded && state.ffmpegEngine === engine){
+    appendLog(`FFmpeg 引擎已加载，复用当前实例: ${engineLabel(engine)}。`);
+    els.engineStatus.textContent = engineLabel(engine);
+    return state.ffmpeg;
+  }
+  if(state.ffmpegLoaded && state.ffmpeg){
+    appendLog(`切换 FFmpeg 引擎: ${engineLabel(state.ffmpegEngine)} -> ${engineLabel(engine)}。`);
+    state.ffmpeg.terminate();
+    state.ffmpeg = null;
+    state.ffmpegLoaded = false;
+    state.ffmpegEngine = "";
+  }
+  setProgress(0, `正在加载 ${engineLabel(engine)}...`);
+  appendLog(`开始加载 FFmpeg.wasm ${engineLabel(engine)}。`);
+  const ffmpeg = new FFmpeg();
+  ffmpeg.on("log", ({ message }) => {
+    state.lastLog = message;
+    if(message){
+      els.ffmpegStatus.textContent = message;
+      parseFfmpegProgress(message);
+      appendLog(`ffmpeg: ${message}`);
+    }
+  });
+  ffmpeg.on("progress", ({ progress }) => {
+    if(Number.isFinite(progress)){
+      const pct = Math.max(0, Math.min(100, progress * 100));
+      updateExportProgress(pct, "编码中");
+    }
+  });
+  const coreBase = new URL(engine === "single" ? "./vendor/ffmpeg/core/dist/esm/" : "./vendor/ffmpeg/core-mt/dist/esm/", document.baseURI).href;
+  appendLog(`coreBase: ${coreBase}`);
+  const loadConfig = {
+    coreURL: await toBlobURL(coreBase + "ffmpeg-core.js", "text/javascript"),
+    wasmURL: await toBlobURL(coreBase + "ffmpeg-core.wasm", "application/wasm")
+  };
+  if(engine !== "single"){
+    loadConfig.workerURL = await toBlobURL(coreBase + "ffmpeg-core.worker.js", "text/javascript");
+  }
+  await ffmpeg.load(loadConfig);
+  state.ffmpeg = ffmpeg;
+  state.ffmpegLoaded = true;
+  state.ffmpegEngine = engine;
+  els.engineStatus.textContent = engineLabel(engine);
+  setProgress(0, `${engineLabel(engine)}已就绪`);
+  appendLog(`${engineLabel(engine)}已就绪。`);
+  return ffmpeg;
+}
+
+async function exportVideos(items, preferredEngine = "mt"){
+  if(!items.length) return;
+  if(state.busy) return;
+  resetLog();
+  state.cancelRequested = false;
+  setBusy(true);
+  try{
+    appendLog(`开始导出 ${items.length} 个视频。`);
+    appendLog(`首选引擎: ${engineLabel(preferredEngine)}。`);
+    appendLog(`crossOriginIsolated: ${String(window.crossOriginIsolated)}`);
+    startExportProgress(items.length);
+    for(let i = 0; i < items.length; i++){
+      const item = items[i];
+      const crop = normalizeCrop(item);
+      setCurrentExportItem(item, i, items.length);
+      appendLog(`视频 ${i + 1}/${items.length}: ${item.name}`);
+      appendLog(`源尺寸: ${item.w}x${item.h}, 时长: ${formatTime(item.duration)}, 文件大小: ${formatBytes(item.file.size)}`);
+      appendLog(`裁切参数: crop=${crop.w}:${crop.h}:${crop.x}:${crop.y},setsar=1`);
+      if(preferredEngine === "single"){
+        await exportOneVideo(item, crop, i, items.length, "single");
+      }else{
+        try{
+          await exportOneVideo(item, crop, i, items.length, "mt");
+        }catch(err){
+          if(err?.name === "StalledEncodeError"){
+            appendLog("多线程引擎疑似卡住，自动切换到兼容模式重试当前视频。");
+            setProgress(0, "多线程卡住，切换兼容模式");
+            await exportOneVideo(item, crop, i, items.length, "single");
+          }else{
+            throw err;
+          }
+        }
+      }
+      await delay(350);
+    }
+    setProgress(100, "视频导出完成");
+    appendLog("全部视频导出完成。");
+    toast("视频导出完成");
+  }catch(err){
+    console.error(err);
+    if(state.cancelRequested){
+      appendLog("流程已由用户停止。");
+      setProgress(0, "已停止导出");
+      toast("已停止导出");
+    }else{
+      appendLog(`流程中止: ${err.message || "视频导出失败"}`);
+      setProgress(0, err.message || "视频导出失败");
+      toast("视频导出失败");
+    }
+  }finally{
+    stopExportTimer();
+    setBusy(false);
+    state.cancelRequested = false;
+  }
+}
+
+async function exportOneVideo(item, crop, index, total, engine){
+  const ffmpeg = await ensureFfmpegLoaded(engine);
+  const inputName = `input_${index}_${Date.now()}.mp4`;
+  const outputName = `output_${index}_${Date.now()}.mp4`;
+  const label = engineLabel(engine);
+  state.exportProgress.lastActivityAt = Date.now();
+  state.exportProgress.percent = 0;
+  setProgress(0, `${label}: 正在写入 ${index + 1}/${total}`);
+  try{
+    await ffmpeg.writeFile(inputName, await fetchFile(item.file));
+    appendLog(`${label}: 已写入 FFmpeg 虚拟文件系统: ${inputName}`);
+    setProgress(0, `${label}: 正在裁切 ${index + 1}/${total}`);
+    const args = buildVideoArgs(inputName, outputName, crop);
+    appendLog(`${label}: 执行命令: ffmpeg ${args.join(" ")}`);
+    const timeoutMs = Math.max(15 * 60 * 1000, Math.ceil((item.duration || 0) * 180000));
+    appendLog(`${label}: 执行超时上限: ${Math.round(timeoutMs / 1000)} 秒`);
+    const code = await execWithStallWatchdog(ffmpeg, args, timeoutMs, engine);
+    appendLog(`${label}: FFmpeg 返回码: ${code}`);
+    if(code !== 0){
+      throw new Error(`FFmpeg 返回码 ${code}`);
+    }
+    setProgress(100, `${label}: 正在保存 ${index + 1}/${total}`);
+    const data = await ffmpeg.readFile(outputName);
+    appendLog(`${label}: 已读取输出文件: ${outputName}, 大小: ${formatBytes(data.byteLength || data.length || 0)}`);
+    const blob = new Blob([data.buffer], { type:"video/mp4" });
+    const url = URL.createObjectURL(blob);
+    downloadURL(url, `${safeName(item.name)}_${ratioTag(item.settings)}.mp4`);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }catch(err){
+    const reason = state.lastLog || err?.message || "未知错误";
+    appendLog(`${label}: 导出失败: ${reason}`);
+    throw err;
+  }finally{
+    await safeDelete(ffmpeg, inputName);
+    await safeDelete(ffmpeg, outputName);
+    appendLog(`${label}: 已清理 FFmpeg 临时文件。`);
+  }
+}
+
+function buildVideoArgs(inputName, outputName, crop){
+  return [
+    "-y",
+    "-i", inputName,
+    "-map", "0:v:0",
+    "-map", "0:a?",
+    "-vf", `crop=${crop.w}:${crop.h}:${crop.x}:${crop.y},setsar=1`,
+    "-c:v", "libx264",
+    "-preset", "veryfast",
+    "-crf", "20",
+    "-pix_fmt", "yuv420p",
+    "-c:a", "copy",
+    "-movflags", "+faststart",
+    outputName
+  ];
+}
+
+function execWithStallWatchdog(ffmpeg, args, timeoutMs, engine){
+  const stallMs = engine === "mt" ? 45000 : 90000;
+  let stalled = false;
+  const timer = setInterval(() => {
+    const p = state.exportProgress;
+    const idleMs = Date.now() - (p.lastActivityAt || p.itemStartedAt || Date.now());
+    if(engine === "mt" && (p.percent || 0) < 1 && idleMs > stallMs){
+      stalled = true;
+      appendLog(`多线程引擎 ${Math.round(idleMs / 1000)} 秒没有推进，终止并准备兼容模式重试。`);
+      ffmpeg.terminate();
+      state.ffmpeg = null;
+      state.ffmpegLoaded = false;
+      state.ffmpegEngine = "";
+      clearInterval(timer);
+    }
+  }, 5000);
+  return ffmpeg.exec(args, timeoutMs)
+    .catch(err => {
+      if(stalled){
+        const e = new Error("多线程 FFmpeg 长时间没有推进");
+        e.name = "StalledEncodeError";
+        throw e;
+      }
+      throw err;
+    })
+    .finally(() => clearInterval(timer));
+}
+
+async function safeDelete(ffmpeg, path){
+  try{ await ffmpeg.deleteFile(path); }catch{}
+}
+
+function engineLabel(engine){
+  return engine === "single" ? "兼容模式" : "多线程引擎";
+}
+
+function setBusy(busy){
+  state.busy = busy;
+  document.body.style.cursor = busy ? "progress" : "";
+  renderThumbs();
+  $$(".mode-tab").forEach(tab => tab.disabled = busy);
+}
+
+function setProgress(percent, message){
+  updateExportProgress(percent, message);
+  els.ffmpegStatus.textContent = message;
+}
+
+function startExportProgress(total){
+  state.exportProgress.active = true;
+  state.exportProgress.total = total;
+  state.exportProgress.startedAt = Date.now();
+  state.exportProgress.percent = 0;
+  state.exportProgress.speed = "--";
+  if(state.exportProgress.timer) clearInterval(state.exportProgress.timer);
+  state.exportProgress.timer = setInterval(refreshProgressTime, 500);
+  updateExportProgress(0, "准备导出");
+}
+
+function setCurrentExportItem(item, index, total){
+  state.exportProgress.item = item;
+  state.exportProgress.index = index;
+  state.exportProgress.total = total;
+  state.exportProgress.itemStartedAt = Date.now();
+  state.exportProgress.duration = item.duration || 0;
+  state.exportProgress.percent = 0;
+  state.exportProgress.lastFrame = 0;
+  state.exportProgress.speed = "--";
+  state.exportProgress.lastActivityAt = Date.now();
+  els.progressTitle.textContent = total > 1 ? `${index + 1}/${total} ${item.name}` : item.name;
+  updateExportProgress(0, "准备编码");
+}
+
+function stopExportTimer(){
+  state.exportProgress.active = false;
+  if(state.exportProgress.timer){
+    clearInterval(state.exportProgress.timer);
+    state.exportProgress.timer = null;
+  }
+  refreshProgressTime();
+}
+
+function updateExportProgress(percent, message){
+  const pct = Math.max(0, Math.min(100, Number(percent) || 0));
+  const previous = state.exportProgress.percent || 0;
+  if(pct > previous + 0.01){
+    state.exportProgress.lastActivityAt = Date.now();
+  }
+  state.exportProgress.percent = Math.max(state.exportProgress.percent || 0, pct);
+  const showPct = state.exportProgress.percent;
+  els.progressBar.style.width = showPct + "%";
+  els.progressPercent.textContent = `${showPct.toFixed(showPct >= 10 ? 0 : 1)}%`;
+  if(message) els.ffmpegStatus.textContent = message;
+  refreshProgressTime();
+}
+
+function refreshProgressTime(){
+  const p = state.exportProgress;
+  if(!p.startedAt){
+    els.progressElapsed.textContent = "00:00";
+    els.progressEta.textContent = "--";
+    els.progressSpeed.textContent = p.speed || "--";
+    return;
+  }
+  const elapsed = Math.max(0, (Date.now() - p.startedAt) / 1000);
+  els.progressElapsed.textContent = formatDuration(elapsed);
+  els.progressSpeed.textContent = p.speed || "--";
+  if(p.percent > 0 && p.percent < 100){
+    const eta = elapsed * (100 - p.percent) / p.percent;
+    els.progressEta.textContent = formatDuration(eta);
+  }else if(p.percent >= 100){
+    els.progressEta.textContent = "00:00";
+  }else{
+    els.progressEta.textContent = "--";
+  }
+}
+
+function parseFfmpegProgress(message){
+  if(!state.exportProgress.active) return;
+  const timeMatch = message.match(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  const speedMatch = message.match(/speed=\s*([^\s]+)/);
+  const frameMatch = message.match(/frame=\s*(\d+)/);
+  if(speedMatch){
+    state.exportProgress.speed = speedMatch[1];
+  }
+  if(timeMatch && state.exportProgress.duration > 0){
+    const seconds = Number(timeMatch[1]) * 3600 + Number(timeMatch[2]) * 60 + Number(timeMatch[3]);
+    const percent = seconds / state.exportProgress.duration * 100;
+    updateExportProgress(percent, frameMatch ? `编码中 · frame ${frameMatch[1]}` : "编码中");
+  }else if(frameMatch){
+    const frame = Number(frameMatch[1]);
+    if(frame > (state.exportProgress.lastFrame || 0)){
+      state.exportProgress.lastFrame = frame;
+      state.exportProgress.lastActivityAt = Date.now();
+    }
+    els.ffmpegStatus.textContent = `编码中 · frame ${frameMatch[1]}`;
+    refreshProgressTime();
+  }
+}
+
+function updateIsolationStatus(){
+  if(state.mode !== "video") return;
+  const ok = Boolean(window.crossOriginIsolated);
+  els.isolationStatus.className = "status " + (ok ? "ok" : "bad");
+  els.isolationStatus.textContent = ok
+    ? "浏览器环境正常：已启用跨域隔离，可使用多线程本地视频处理。"
+    : "当前页面未启用跨域隔离。请通过配置好响应头的域名或项目本地服务器打开，视频导出会被禁用。";
+}
+
+function updateVideoControls(){
+  const v = els.previewVideo;
+  const duration = Number.isFinite(v.duration) ? v.duration : 0;
+  if(!els.seek.matches(":active")){
+    els.seek.value = duration ? String(Math.round((v.currentTime / duration) * 1000)) : "0";
+  }
+  els.playPause.textContent = v.paused ? "▶" : "Ⅱ";
+  els.timeLabel.textContent = `${formatTime(v.currentTime || 0)} / ${formatTime(duration)}`;
+}
+
+els.playPause.addEventListener("click", async () => {
+  const v = els.previewVideo;
+  if(v.paused) await v.play();
+  else v.pause();
+  updateVideoControls();
+});
+
+els.seek.addEventListener("input", () => {
+  const v = els.previewVideo;
+  const duration = Number.isFinite(v.duration) ? v.duration : 0;
+  if(duration) v.currentTime = (Number(els.seek.value) / 1000) * duration;
+});
+
+els.copyLog.addEventListener("click", async () => {
+  const text = state.logLines.join("\n") || "暂无日志";
+  try{
+    await navigator.clipboard.writeText(text);
+    toast("日志已复制");
+  }catch{
+    els.ffmpegLog.focus();
+    els.ffmpegLog.select();
+    document.execCommand("copy");
+    toast("日志已复制");
+  }
+});
+
+els.downloadLog.addEventListener("click", () => {
+  const text = state.logLines.join("\n") || "暂无日志";
+  const blob = new Blob([text], { type:"text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  downloadURL(url, `cropper-log-${new Date().toISOString().replace(/[:.]/g,"-")}.txt`);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+function formatTime(sec){
+  sec = Math.max(0, Number.isFinite(sec) ? sec : 0);
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+
+function formatDuration(sec){
+  sec = Math.max(0, Number.isFinite(sec) ? sec : 0);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if(h > 0) return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+
+function formatBytes(bytes){
+  bytes = Math.max(0, Number(bytes) || 0);
+  if(bytes < 1024) return `${bytes} B`;
+  const units = ["KB","MB","GB"];
+  let value = bytes / 1024;
+  let unit = units[0];
+  for(let i = 1; i < units.length && value >= 1024; i++){
+    value /= 1024;
+    unit = units[i];
+  }
+  return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${unit}`;
+}
+
+function escapeHTML(str){
+  return str.replace(/[&<>"']/g, c => ({
+    "&":"&amp;",
+    "<":"&lt;",
+    ">":"&gt;",
+    '"':"&quot;",
+    "'":"&#039;"
+  })[c]);
+}
+
+function delay(ms){
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function appendLog(message){
+  const line = `[${new Date().toLocaleTimeString()}] ${message}`;
+  state.logLines.push(line);
+  if(state.logLines.length > 500) state.logLines.splice(0, state.logLines.length - 500);
+  els.ffmpegLog.value = state.logLines.join("\n");
+  els.ffmpegLog.scrollTop = els.ffmpegLog.scrollHeight;
+}
+
+function resetLog(){
+  state.logLines = [];
+  els.ffmpegLog.value = "";
+}
+
+let toastTimer;
+function toast(msg){
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 1900);
+}
+
+updateIsolationStatus();
+renderThumbs();
+setMode("image");
+</script>
+</body>
+</html>
