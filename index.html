@@ -1331,6 +1331,13 @@ function positionRectByAnchor(item){
   clampRect(item);
 }
 
+function markManualAnchor(item){
+  const s = item.settings;
+  if(s.anchor === "manual") return;
+  s.anchor = "manual";
+  syncPanelFromSettings();
+}
+
 function clampRect(item){
   const s = item.settings;
   if(!s.rect) return;
@@ -1399,6 +1406,7 @@ els.previewVideo.addEventListener("play", updateVideoControls);
     const r = ratioVal(s);
     const dx = (e.clientX - sx) / sc;
     const dy = (e.clientY - sy) / sc;
+    const changedByPointer = Math.abs(dx) > .01 || Math.abs(dy) > .01;
     if(mode === "move"){
       s.rect.x = Math.max(0, Math.min(item.w - s.rect.w, start.x + dx));
       s.rect.y = Math.max(0, Math.min(item.h - s.rect.h, start.y + dy));
@@ -1440,6 +1448,7 @@ els.previewVideo.addEventListener("play", updateVideoControls);
       $("#cropScale").value = Math.round(s.scale * 100);
       $("#cropScaleVal").textContent = Math.round(s.scale * 100) + "%";
     }
+    if(changedByPointer) markManualAnchor(item);
     drawCropBox();
     updateInfo();
   });
@@ -1538,18 +1547,26 @@ els.applyCurrentToAll.addEventListener("click", () => {
 });
 
 function applyCurrentSettingsToAll(sourceItem){
+  ensureRect(sourceItem);
   const source = sourceItem.settings;
-  const sourceRect = source.rect || { x:0, y:0, w:sourceItem.w, h:sourceItem.h };
+  const sourceRect = { ...source.rect };
   const relativeRect = {
     x: sourceRect.x / sourceItem.w,
     y: sourceRect.y / sourceItem.h,
     w: sourceRect.w / sourceItem.w,
     h: sourceRect.h / sourceItem.h
   };
+  const fixedRatio = ratioVal(source);
+  const sourceFit = fixedRatio ? maxFit(sourceItem.w, sourceItem.h, fixedRatio) : null;
+  const actualScale = sourceFit ? Math.min(1, Math.max(.1, sourceRect.w / sourceFit.w)) : source.scale;
+  const sourceTravelX = Math.max(0, sourceItem.w - sourceRect.w);
+  const sourceTravelY = Math.max(0, sourceItem.h - sourceRect.h);
+  const positionX = sourceTravelX ? sourceRect.x / sourceTravelX : .5;
+  const positionY = sourceTravelY ? sourceRect.y / sourceTravelY : .5;
   listFor().forEach(item => {
     item.settings.ratio = source.ratio;
     item.settings.anchor = source.anchor;
-    item.settings.scale = source.scale;
+    item.settings.scale = actualScale;
     if(source.ratio === "free"){
       item.settings.rect = {
         x: relativeRect.x * item.w,
@@ -1559,8 +1576,16 @@ function applyCurrentSettingsToAll(sourceItem){
       };
       clampRect(item);
     }else{
-      item.settings.rect = null;
-      ensureRect(item);
+      const fit = maxFit(item.w, item.h, fixedRatio);
+      const w = fit.w * actualScale;
+      const h = fit.h * actualScale;
+      item.settings.rect = {
+        x: Math.max(0, item.w - w) * positionX,
+        y: Math.max(0, item.h - h) * positionY,
+        w,
+        h
+      };
+      clampRect(item);
     }
   });
 }
