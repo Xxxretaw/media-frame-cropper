@@ -21,16 +21,31 @@ const types = {
 };
 
 function safePath(urlPath){
-  const clean = decodeURIComponent(urlPath.split("?")[0]);
+  let clean;
+  try{
+    clean = decodeURIComponent(urlPath.split("?")[0]);
+  }catch{
+    return { error:400, message:"Bad request" };
+  }
   const requested = clean === "/" ? "/index.html" : clean;
   const full = resolve(root, "." + normalize(requested));
-  if(!full.startsWith(root)) return null;
-  return full;
+  if(!full.startsWith(root)) return { error:403, message:"Forbidden" };
+  return { full };
 }
 
 createServer((req, res) => {
-  const file = safePath(req.url || "/");
-  const target = file && existsSync(file) ? file : join(root, "index.html");
+  const resolved = safePath(req.url || "/");
+  if(resolved.error){
+    res.writeHead(resolved.error);
+    res.end(resolved.message);
+    return;
+  }
+  const target = resolved.full;
+  if(!target || !existsSync(target)){
+    res.writeHead(404);
+    res.end("Not found");
+    return;
+  }
   let stat;
   try{
     stat = statSync(target);

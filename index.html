@@ -90,6 +90,52 @@
   .mode-tab.active{background:#f2f3f5;color:#141518;font-weight:700;box-shadow:0 1px 5px rgba(0,0,0,.28)}
   header .spacer{flex:1}
   .infoline{font-size:12px;color:var(--sub);text-align:right;white-space:nowrap}
+  .header-status{display:flex;align-items:center;gap:8px;min-width:0}
+  .feedback-btn{
+    min-width:44px;
+    height:28px;
+    padding:0 10px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.035);
+    color:var(--sub);
+    cursor:pointer;
+    font-size:12px;
+    font-weight:650;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:background .15s,border-color .15s,color .15s;
+  }
+  .feedback-btn:hover{
+    background:rgba(255,255,255,.075);
+    border-color:rgba(255,255,255,.22);
+    color:var(--txt);
+  }
+  .feedback-popover{
+    position:absolute;
+    top:44px;
+    right:16px;
+    width:236px;
+    padding:12px;
+    border:1px solid var(--line2);
+    border-radius:12px;
+    background:rgba(28,29,32,.98);
+    box-shadow:0 18px 50px rgba(0,0,0,.38),0 1px 0 rgba(255,255,255,.08) inset;
+    z-index:100;
+  }
+  .feedback-popover h4{
+    font-size:13px;
+    color:var(--txt);
+    margin-bottom:6px;
+  }
+  .feedback-popover p{
+    font-size:12px;
+    line-height:1.55;
+    color:var(--sub);
+    margin-bottom:10px;
+  }
+  .feedback-actions{display:flex;gap:8px}
   .main{flex:1;display:flex;min-height:0;overflow:hidden}
 
   .sidebar{
@@ -568,8 +614,19 @@
       <button class="mode-tab" data-mode="video">视频</button>
     </div>
     <div class="spacer"></div>
-    <span class="infoline" id="globalInfo"></span>
+    <div class="header-status">
+      <span class="infoline" id="globalInfo"></span>
+      <button class="feedback-btn" id="saveFeedbackInfo" type="button" aria-haspopup="dialog" aria-expanded="false">反馈</button>
+    </div>
   </header>
+  <div class="feedback-popover hide" id="feedbackPopover" role="dialog" aria-label="反馈信息">
+    <h4>保存反馈信息</h4>
+    <p>生成一份运行信息，用于排查导入或导出问题。</p>
+    <div class="feedback-actions">
+      <button class="btn ghost compact" id="cancelFeedback" type="button">取消</button>
+      <button class="btn primary compact" id="confirmFeedback" type="button">保存</button>
+    </div>
+  </div>
 
   <div class="main">
     <aside class="sidebar">
@@ -723,6 +780,7 @@ const state = {
   ffmpegEngine: "",
   lastLog: "",
   logLines: [],
+  runtimeErrors: [],
   exportProgress: {
     active: false,
     item: null,
@@ -766,11 +824,24 @@ const els = {
   ffmpegLog: $("#ffmpegLog"),
   copyLog: $("#copyLog"),
   downloadLog: $("#downloadLog"),
+  saveFeedbackInfo: $("#saveFeedbackInfo"),
+  feedbackPopover: $("#feedbackPopover"),
+  cancelFeedback: $("#cancelFeedback"),
+  confirmFeedback: $("#confirmFeedback"),
   isolationStatus: $("#isolationStatus"),
   downloadOne: $("#downloadOne"),
   downloadAll: $("#downloadAll"),
   applyCurrentToAll: $("#applyCurrentToAll")
 };
+
+window.addEventListener("error", event => {
+  recordRuntimeError("error", event.message, event.filename, event.lineno, event.colno);
+});
+
+window.addEventListener("unhandledrejection", event => {
+  const reason = event.reason;
+  recordRuntimeError("unhandledrejection", reason?.stack || reason?.message || String(reason || "unknown"));
+});
 
 function defaultSettings(){
   return { ratio:"9:16", anchor:"center", scale:1, rect:null };
@@ -923,10 +994,12 @@ async function handleFiles(fileList){
     const rejected = files.length - arr.length;
     if(!arr.length){ toast("当前版本仅支持 MP4 视频"); return; }
     const wasEmpty = state.videos.length === 0;
+    let loaded = 0;
     for(const file of arr){
       try{
         const video = await loadVideoFile(file);
         state.videos.push(video);
+        loaded++;
         renderThumbs();
         if(state.current.video === -1) selectItem(0);
       }catch(err){
@@ -934,7 +1007,11 @@ async function handleFiles(fileList){
         toast("有视频读取失败");
       }
     }
-    toast((wasEmpty ? "已导入 " : "已追加 ") + arr.length + " 个视频" + (rejected ? `，已忽略 ${rejected} 个非 MP4` : ""));
+    if(loaded){
+      toast((wasEmpty ? "已导入 " : "已追加 ") + loaded + " 个视频" + (rejected ? `，已忽略 ${rejected} 个非 MP4` : ""));
+    }else{
+      toast("视频读取失败");
+    }
   }
 }
 
@@ -1830,6 +1907,131 @@ els.downloadLog.addEventListener("click", () => {
   downloadURL(url, `cropper-log-${new Date().toISOString().replace(/[:.]/g,"-")}.txt`);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
+
+els.saveFeedbackInfo.addEventListener("click", event => {
+  event.stopPropagation();
+  toggleFeedbackPopover();
+});
+
+els.cancelFeedback.addEventListener("click", () => {
+  closeFeedbackPopover();
+});
+
+els.confirmFeedback.addEventListener("click", () => {
+  saveFeedbackReport();
+  closeFeedbackPopover();
+});
+
+document.addEventListener("click", event => {
+  if(els.feedbackPopover.classList.contains("hide")) return;
+  if(els.feedbackPopover.contains(event.target) || els.saveFeedbackInfo.contains(event.target)) return;
+  closeFeedbackPopover();
+});
+
+function toggleFeedbackPopover(){
+  const willOpen = els.feedbackPopover.classList.contains("hide");
+  els.feedbackPopover.classList.toggle("hide", !willOpen);
+  els.saveFeedbackInfo.setAttribute("aria-expanded", String(willOpen));
+}
+
+function closeFeedbackPopover(){
+  els.feedbackPopover.classList.add("hide");
+  els.saveFeedbackInfo.setAttribute("aria-expanded", "false");
+}
+
+function saveFeedbackReport(){
+  const text = buildFeedbackReport();
+  const blob = new Blob([text], { type:"text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  downloadURL(url, `cropper-feedback-${new Date().toISOString().replace(/[:.]/g,"-")}.txt`);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast("反馈信息已保存");
+}
+
+function buildFeedbackReport(){
+  const item = cur();
+  const crop = item ? getSafeCropInfo(item) : null;
+  const progress = state.exportProgress;
+  const lines = [
+    "画幅裁切工具反馈信息",
+    "",
+    "[环境]",
+    `time: ${new Date().toISOString()}`,
+    `url: ${location.href}`,
+    `protocol: ${location.protocol}`,
+    `userAgent: ${navigator.userAgent}`,
+    `platform: ${navigator.platform || "--"}`,
+    `language: ${navigator.language || "--"}`,
+    `viewport: ${window.innerWidth}x${window.innerHeight}`,
+    `devicePixelRatio: ${window.devicePixelRatio || 1}`,
+    `crossOriginIsolated: ${String(window.crossOriginIsolated)}`,
+    "",
+    "[状态]",
+    `mode: ${state.mode}`,
+    `busy: ${String(state.busy)}`,
+    `images: ${state.images.length}`,
+    `videos: ${state.videos.length}`,
+    `ffmpegLoaded: ${String(state.ffmpegLoaded)}`,
+    `ffmpegEngine: ${state.ffmpegEngine || "--"}`,
+    `ffmpegStatus: ${els.ffmpegStatus?.textContent || "--"}`,
+    `progress: ${(progress.percent || 0).toFixed(1)}%`,
+    "",
+    "[当前素材]",
+    item ? formatItemForReport(item, crop) : "none",
+    "",
+    "[运行错误]",
+    state.runtimeErrors.length ? state.runtimeErrors.map(formatRuntimeError).join("\n") : "none",
+    "",
+    "[FFmpeg 日志]",
+    state.logLines.length ? state.logLines.join("\n") : "none"
+  ];
+  return lines.join("\n");
+}
+
+function getSafeCropInfo(item){
+  try{
+    return item.type === "video" ? normalizeCrop(item) : outputSize(item);
+  }catch(err){
+    return { error:err.message || String(err) };
+  }
+}
+
+function formatItemForReport(item, crop){
+  const s = item.settings || {};
+  return [
+    `type: ${item.type}`,
+    `name: ${item.name}`,
+    `size: ${item.file ? formatBytes(item.file.size) : "--"}`,
+    `source: ${item.w}x${item.h}`,
+    `duration: ${item.type === "video" ? formatTime(item.duration || 0) : "--"}`,
+    `ratio: ${s.ratio || "--"}`,
+    `anchor: ${s.anchor || "--"}`,
+    `scale: ${Math.round((s.scale || 0) * 100)}%`,
+    `rect: ${s.rect ? `${Math.round(s.rect.x)},${Math.round(s.rect.y)},${Math.round(s.rect.w)}x${Math.round(s.rect.h)}` : "--"}`,
+    `normalizedCrop: ${crop ? JSON.stringify(crop) : "--"}`
+  ].join("\n");
+}
+
+function recordRuntimeError(type, message, file = "", line = "", column = ""){
+  state.runtimeErrors.push({
+    time:new Date().toISOString(),
+    type,
+    message:message || "unknown",
+    file,
+    line,
+    column
+  });
+  if(state.runtimeErrors.length > 50) state.runtimeErrors.splice(0, state.runtimeErrors.length - 50);
+}
+
+function formatRuntimeError(error){
+  return [
+    `time: ${error.time}`,
+    `type: ${error.type}`,
+    `message: ${error.message}`,
+    error.file ? `file: ${error.file}:${error.line || ""}:${error.column || ""}` : ""
+  ].filter(Boolean).join("\n");
+}
 
 function formatTime(sec){
   sec = Math.max(0, Number.isFinite(sec) ? sec : 0);
